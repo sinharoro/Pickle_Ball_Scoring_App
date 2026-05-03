@@ -1,32 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/game_models.dart';
 import '../providers/game_state_provider.dart';
+import '../theme/app_colors.dart';
 import '../widgets/score_card.dart';
 import '../widgets/control_button.dart';
-import '../widgets/serving_indicator.dart';
-import '../widgets/game_over_dialog.dart';
+import '../widgets/game_over_sheet.dart';
+import '../widgets/reset_confirm_sheet.dart';
+import '../widgets/score_log_sheet.dart';
 
-class GameScoreScreen extends StatelessWidget {
-  const GameScoreScreen({super.key});
+class GameScoreScreen extends StatefulWidget {
+  final VoidCallback onBackToSetup;
+
+  const GameScoreScreen({
+    super.key,
+    required this.onBackToSetup,
+  });
+
+  @override
+  State<GameScoreScreen> createState() => _GameScoreScreenState();
+}
+
+class _GameScoreScreenState extends State<GameScoreScreen> {
+  bool _gameOverShown = false;
 
   @override
   Widget build(BuildContext context) {
     return Consumer<GameStateProvider>(
       builder: (context, gameState, child) {
-        if (gameState.gameOver) {
+        if (gameState.gameOver && !_gameOverShown) {
+          _gameOverShown = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showGameOverDialog(context, gameState);
+            _showGameOverSheet(context, gameState);
           });
         }
 
         return Column(
           children: [
-            _buildScoreHeader(context, gameState),
+            _buildTopBar(context, gameState),
             Expanded(
               child: _buildScoreDisplay(context, gameState),
             ),
-            _buildServingInfo(context, gameState),
+            _buildScoreNotationBar(context, gameState),
             _buildControls(context, gameState),
           ],
         );
@@ -34,63 +51,77 @@ class GameScoreScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildScoreHeader(BuildContext context, GameStateProvider gameState) {
+  Widget _buildTopBar(BuildContext context, GameStateProvider gameState) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: const Color(0xFF1565C0),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: AppColors.bgCard,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            gameState.isDoubles ? 'Doubles' : 'Singles',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            'First to ${gameState.config.winningScore}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
+          GestureDetector(
+            onTap: () {
+              gameState.resetGame();
+              widget.onBackToSetup();
+            },
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.arrow_back,
+                  color: AppColors.textMuted,
+                  size: 18,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'SETUP',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
             ),
           ),
           Row(
             children: [
-              if (gameState.isRallyScoring)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.orange,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'Rally',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+              _ModeChip(label: gameState.isDoubles ? 'DOUBLES' : 'SINGLES'),
+              const SizedBox(width: 8),
+              _ModeChip(label: gameState.isRallyScoring ? 'RALLY' : 'TRAD'),
               if (gameState.config.winByTwo) ...[
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'Win by 2',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+                _ModeChip(label: 'WIN BY 2'),
               ],
             ],
+          ),
+          GestureDetector(
+            onTap: () => _showScoreLogSheet(context, gameState),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.bg,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.history,
+                    color: AppColors.textMuted,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'LOG',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -108,47 +139,51 @@ class GameScoreScreen extends StatelessWidget {
               teamName: 'Team A',
               score: gameState.teamAScore,
               isServing: gameState.servingTeam == Team.a,
-              teamColor: const Color(0xFF1976D2),
+              teamColor: AppColors.teamA,
+              showServerInfo: true,
             ),
             ScoreCard(
               teamName: 'Team B',
               score: gameState.teamBScore,
               isServing: gameState.servingTeam == Team.b,
-              teamColor: const Color(0xFFD32F2F),
+              teamColor: AppColors.teamB,
+              showServerInfo: true,
             ),
           ],
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            gameState.scoreDisplay,
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
         ),
       ],
     );
   }
 
-  Widget _buildServingInfo(BuildContext context, GameStateProvider gameState) {
+  Widget _buildScoreNotationBar(BuildContext context, GameStateProvider gameState) {
+    String sideText = gameState.serverSide == CourtSide.right ? 'RIGHT COURT' : 'LEFT COURT';
+
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.bgCardBorder),
+      ),
+      child: Column(
         children: [
-          ServingIndicator(
-            team: gameState.servingTeam,
-            serverNumber: gameState.serverNumber,
-            isDoubles: gameState.isDoubles,
-            serverSide: gameState.serverSide,
+          Text(
+            gameState.scoreDisplay,
+            style: GoogleFonts.bebasNeue(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: AppColors.accent,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${gameState.servingTeam == Team.a ? 'Team A' : 'Team B'} · Server ${gameState.serverNumber == ServerNumber.one ? '1' : '2'} · $sideText',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppColors.textMuted,
+            ),
           ),
         ],
       ),
@@ -157,54 +192,64 @@ class GameScoreScreen extends StatelessWidget {
 
   Widget _buildControls(BuildContext context, GameStateProvider gameState) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           Row(
             children: [
               Expanded(
                 child: ControlButton(
-                  label: 'Point for Team A',
-                  color: const Color(0xFF1976D2),
+                  label: 'TEAM A',
+                  sublabel: '+1',
+                  color: AppColors.teamA,
                   onPressed: gameState.gameOver
                       ? null
-                      : () => gameState.recordPointForTeam(Team.a),
+                      : () {
+                          HapticFeedback.mediumImpact();
+                          gameState.recordPointForTeam(Team.a);
+                        },
+                  enabled: !gameState.gameOver,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ControlButton(
-                  label: 'Point for Team B',
-                  color: const Color(0xFFD32F2F),
+                  label: 'TEAM B',
+                  sublabel: '+1',
+                  color: AppColors.teamB,
                   onPressed: gameState.gameOver
                       ? null
-                      : () => gameState.recordPointForTeam(Team.b),
+                      : () {
+                          HapticFeedback.mediumImpact();
+                          gameState.recordPointForTeam(Team.b);
+                        },
+                  enabled: !gameState.gameOver,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          ControlButton(
+            label: 'FAULT / SIDE OUT',
+            icon: Icons.flash_on,
+            color: AppColors.fault,
+            onPressed: gameState.gameOver || gameState.isRallyScoring
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    gameState.recordFault();
+                  },
+            enabled: !gameState.isRallyScoring && !gameState.gameOver,
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: ControlButton(
-                  label: gameState.isRallyScoring ? 'N/A' : 'Fault / Side Out',
-                  color: Colors.orange[700]!,
-                  onPressed: gameState.gameOver || gameState.isRallyScoring
-                      ? null
-                      : () => gameState.recordFault(),
-                  enabled: !gameState.isRallyScoring && !gameState.gameOver,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ControlButton(
-                  label: 'Undo Last Action',
-                  color: Colors.grey[600]!,
+                  label: 'UNDO',
+                  icon: Icons.undo,
+                  color: AppColors.textMuted,
+                  outlined: true,
                   onPressed: gameState.canUndo && !gameState.gameOver
                       ? () => gameState.undoLastAction()
                       : null,
@@ -214,8 +259,10 @@ class GameScoreScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ControlButton(
-                  label: 'Reset Game',
-                  color: Colors.red[700]!,
+                  label: 'RESET',
+                  icon: Icons.refresh,
+                  color: AppColors.textMuted,
+                  outlined: true,
                   onPressed: () => _showResetConfirmation(context, gameState),
                   enabled: true,
                 ),
@@ -228,43 +275,76 @@ class GameScoreScreen extends StatelessWidget {
   }
 
   void _showResetConfirmation(BuildContext context, GameStateProvider gameState) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Game?'),
-        content: const Text('Are you sure you want to reset the game? All scores will be cleared.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              gameState.resetGame();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Reset', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+      backgroundColor: Colors.transparent,
+      builder: (context) => ResetConfirmSheet(
+        onReset: () {
+          gameState.resetGame();
+          Navigator.of(context).pop();
+        },
+        onCancel: () => Navigator.of(context).pop(),
       ),
     );
   }
 
-  void _showGameOverDialog(BuildContext context, GameStateProvider gameState) {
-    showDialog(
+  void _showGameOverSheet(BuildContext context, GameStateProvider gameState) {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => GameOverDialog(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => GameOverSheet(
         winner: gameState.winner!,
         teamAScore: gameState.teamAScore,
         teamBScore: gameState.teamBScore,
         onNewGame: () {
           Navigator.of(context).pop();
-          gameState.resetGame();
+          _gameOverShown = false;
         },
         onSetup: () {
           Navigator.of(context).pop();
+          gameState.resetGame();
+          _gameOverShown = false;
+          widget.onBackToSetup();
         },
+      ),
+    );
+  }
+
+  void _showScoreLogSheet(BuildContext context, GameStateProvider gameState) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => ScoreLogSheet(
+        actionLog: gameState.actionLog,
+      ),
+    );
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  final String label;
+
+  const _ModeChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: AppColors.accent,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

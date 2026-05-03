@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/game_models.dart';
+import '../theme/app_colors.dart';
 
 class GameSetupScreen extends StatefulWidget {
   final GameConfig config;
@@ -19,6 +22,8 @@ class GameSetupScreen extends StatefulWidget {
 
 class _GameSetupScreenState extends State<GameSetupScreen> {
   late TextEditingController _customScoreController;
+  final List<int> _scorePresets = [11, 15, 21];
+  bool _isPressed = false;
 
   @override
   void initState() {
@@ -39,19 +44,44 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Match Type',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.sports_tennis,
+                color: AppColors.accent,
+                size: 32,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'PICKLEBALL',
+                style: GoogleFonts.bebasNeue(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  letterSpacing: 4,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'SCOREKEEPER',
+                style: GoogleFonts.bebasNeue(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textMuted,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 40),
+          _SectionHeader(title: 'MATCH TYPE'),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _SelectionButton(
-                  label: 'Singles',
+                child: _OptionCard(
+                  label: 'SINGLES',
                   isSelected: widget.config.matchType == MatchType.singles,
                   onTap: () => widget.onConfigChanged(
                     widget.config.copyWith(matchType: MatchType.singles),
@@ -60,8 +90,8 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _SelectionButton(
-                  label: 'Doubles',
+                child: _OptionCard(
+                  label: 'DOUBLES',
                   isSelected: widget.config.matchType == MatchType.doubles,
                   onTap: () => widget.onConfigChanged(
                     widget.config.copyWith(matchType: MatchType.doubles),
@@ -71,19 +101,14 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
             ],
           ),
           const SizedBox(height: 32),
-          const Text(
-            'Scoring System',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          _SectionHeader(title: 'SCORING SYSTEM'),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _SelectionButton(
-                  label: 'Traditional\n(Side-Out)',
+                child: _OptionCard(
+                  label: 'TRADITIONAL',
+                  subtitle: 'Side-Out scoring',
                   isSelected: widget.config.scoringSystem == ScoringSystem.traditional,
                   onTap: () => widget.onConfigChanged(
                     widget.config.copyWith(scoringSystem: ScoringSystem.traditional),
@@ -92,8 +117,9 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _SelectionButton(
-                  label: 'Rally',
+                child: _OptionCard(
+                  label: 'RALLY',
+                  subtitle: 'Every rally scores',
                   isSelected: widget.config.scoringSystem == ScoringSystem.rally,
                   onTap: () => widget.onConfigChanged(
                     widget.config.copyWith(scoringSystem: ScoringSystem.rally),
@@ -103,93 +129,76 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
             ],
           ),
           const SizedBox(height: 32),
-          const Text(
-            'Winning Score',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          _SectionHeader(title: 'GAME TO'),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              _ScorePresetButton(
-                score: 11,
-                isSelected: widget.config.winningScore == 11,
-                onTap: () => widget.onConfigChanged(
-                  widget.config.copyWith(winningScore: 11),
+              ..._scorePresets.map((score) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: score != _scorePresets.last ? 12 : 0,
+                  ),
+                  child: _PillButton(
+                    label: '$score',
+                    isSelected: widget.config.winningScore == score,
+                    onTap: () => widget.onConfigChanged(
+                      widget.config.copyWith(winningScore: score),
+                    ),
+                  ),
                 ),
-              ),
-              _ScorePresetButton(
-                score: 15,
-                isSelected: widget.config.winningScore == 15,
-                onTap: () => widget.onConfigChanged(
-                  widget.config.copyWith(winningScore: 15),
-                ),
-              ),
-              _ScorePresetButton(
-                score: 21,
-                isSelected: widget.config.winningScore == 21,
-                onTap: () => widget.onConfigChanged(
-                  widget.config.copyWith(winningScore: 21),
-                ),
-              ),
+              )),
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              const Text(
-                'Custom: ',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(
-                width: 80,
-                child: TextField(
-                  controller: _customScoreController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(),
-                    hintText: 'Any',
-                  ),
-                  onSubmitted: (value) {
-                    final score = int.tryParse(value);
-                    if (score != null && score > 0) {
-                      widget.onConfigChanged(
-                        widget.config.copyWith(winningScore: score),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
+          _CustomScoreField(
+            controller: _customScoreController,
+            onSubmit: (value) {
+              final score = int.tryParse(value);
+              if (score != null && score > 0 && !_scorePresets.contains(score)) {
+                widget.onConfigChanged(
+                  widget.config.copyWith(winningScore: score),
+                );
+              }
+            },
           ),
           const SizedBox(height: 32),
-          SwitchListTile(
-            title: const Text(
-              'Win by 2',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            subtitle: const Text('Game must be won by 2 or more points'),
+          _SectionHeader(title: 'WIN BY 2'),
+          const SizedBox(height: 12),
+          _CustomToggle(
             value: widget.config.winByTwo,
             onChanged: (value) => widget.onConfigChanged(
               widget.config.copyWith(winByTwo: value),
             ),
           ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: widget.onStartGame,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: const Color(0xFF1565C0),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'Start Game',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          const SizedBox(height: 40),
+          GestureDetector(
+            onTapDown: (_) => setState(() => _isPressed = true),
+            onTapUp: (_) {
+              setState(() => _isPressed = false);
+              HapticFeedback.mediumImpact();
+              widget.onStartGame();
+            },
+            onTapCancel: () => setState(() => _isPressed = false),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
+              transform: Matrix4.identity()..scale(_isPressed ? 0.97 : 1.0),
+              transformAlignment: Alignment.center,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  'START GAME',
+                  style: GoogleFonts.bebasNeue(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.bg,
+                    letterSpacing: 3,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -198,12 +207,87 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
   }
 }
 
-class _SelectionButton extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: GoogleFonts.inter(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textMuted,
+        letterSpacing: 1.5,
+      ),
+    );
+  }
+}
+
+class _OptionCard extends StatelessWidget {
+  final String label;
+  final String? subtitle;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _OptionCard({
+    required this.label,
+    this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.accent : AppColors.bgCardBorder,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.bebasNeue(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? AppColors.accent : AppColors.textMuted,
+                letterSpacing: 2,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle!,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PillButton extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _SelectionButton({
+  const _PillButton({
     required this.label,
     required this.isSelected,
     required this.onTap,
@@ -211,22 +295,26 @@ class _SelectionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? const Color(0xFF1565C0) : Colors.grey[200],
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          alignment: Alignment.center,
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : AppColors.bgCard,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? AppColors.accent : AppColors.bgCardBorder,
+          ),
+        ),
+        child: Center(
           child: Text(
             label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
+            style: GoogleFonts.bebasNeue(
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: isSelected ? Colors.white : Colors.black87,
+              color: isSelected ? AppColors.bg : AppColors.textMuted,
+              letterSpacing: 2,
             ),
           ),
         ),
@@ -235,37 +323,113 @@ class _SelectionButton extends StatelessWidget {
   }
 }
 
-class _ScorePresetButton extends StatelessWidget {
-  final int score;
-  final bool isSelected;
-  final VoidCallback onTap;
+class _CustomScoreField extends StatelessWidget {
+  final TextEditingController controller;
+  final Function(String) onSubmit;
 
-  const _ScorePresetButton({
-    required this.score,
-    required this.isSelected,
-    required this.onTap,
+  const _CustomScoreField({
+    required this.controller,
+    required this.onSubmit,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? const Color(0xFF1565C0) : Colors.grey[200],
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          alignment: Alignment.center,
-          child: Text(
-            '$score',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? Colors.white : Colors.black87,
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: GoogleFonts.inter(
+        fontSize: 18,
+        color: AppColors.textPrimary,
+      ),
+      decoration: InputDecoration(
+        hintText: 'Custom',
+        hintStyle: GoogleFonts.inter(
+          fontSize: 16,
+          color: AppColors.textMuted,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        filled: true,
+        fillColor: AppColors.bgCard,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.bgCardBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.bgCardBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
+        ),
+      ),
+      onSubmitted: onSubmit,
+    );
+  }
+}
+
+class _CustomToggle extends StatefulWidget {
+  final bool value;
+  final Function(bool) onChanged;
+
+  const _CustomToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_CustomToggle> createState() => _CustomToggleState();
+}
+
+class _CustomToggleState extends State<_CustomToggle> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.bgCardBorder),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Win by 2 points',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: AppColors.textPrimary,
             ),
           ),
-        ),
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              widget.onChanged(!widget.value);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 52,
+              height: 32,
+              decoration: BoxDecoration(
+                color: widget.value ? AppColors.accent : AppColors.bgCardBorder,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 200),
+                alignment: widget.value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: AppColors.bg,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

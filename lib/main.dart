@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/game_state_provider.dart';
+import 'theme/app_theme.dart';
 import 'screens/game_setup_screen.dart';
 import 'screens/game_score_screen.dart';
 
@@ -18,13 +19,7 @@ class PickleballScorekeeperApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Pickleball Scorekeeper',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1565C0),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.darkTheme,
         home: const HomeScreen(),
       ),
     );
@@ -39,38 +34,57 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isGameStarted = false;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _navigateToScore() {
+    _pageController.animateToPage(
+      1,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _navigateToSetup() {
+    _pageController.animateToPage(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _isGameStarted
-          ? AppBar(
-              title: const Text('Pickleball Scorekeeper'),
-              backgroundColor: const Color(0xFF1565C0),
-              foregroundColor: Colors.white,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _isGameStarted = false),
-              ),
-            )
-          : AppBar(
-              title: const Text('Pickleball Scorekeeper'),
-              backgroundColor: const Color(0xFF1565C0),
-              foregroundColor: Colors.white,
-              centerTitle: true,
-            ),
-      body: _isGameStarted
-          ? const GameScoreScreen()
-          : Consumer<GameStateProvider>(
-              builder: (context, gameState, child) {
-                return GameSetupScreen(
-                  config: gameState.config,
-                  onConfigChanged: (config) => gameState.setConfig(config),
-                  onStartGame: () => setState(() => _isGameStarted = true),
-                );
-              },
-            ),
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          Consumer<GameStateProvider>(
+            builder: (context, gameState, child) {
+              return GameSetupScreen(
+                config: gameState.config,
+                onConfigChanged: (config) => gameState.setConfig(config),
+                onStartGame: _navigateToScore,
+              );
+            },
+          ),
+          GameScoreScreen(
+            onBackToSetup: _navigateToSetup,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../models/game_models.dart';
 import '../engine/scoring_engine.dart';
 
@@ -19,6 +20,7 @@ class GameStateProvider extends ChangeNotifier {
   bool _gameOver = false;
   Team? _winner;
   final List<GameStateSnapshot> _history = [];
+  final List<String> _actionLog = [];
 
   GameConfig get config => _config;
   int get teamAScore => _teamAScore;
@@ -32,15 +34,17 @@ class GameStateProvider extends ChangeNotifier {
   bool get canUndo => _history.isNotEmpty;
   bool get isDoubles => _config.matchType == MatchType.doubles;
   bool get isRallyScoring => _config.scoringSystem == ScoringSystem.rally;
+  List<String> get actionLog => List.unmodifiable(_actionLog);
 
   String get scoreDisplay {
     int serverScore = ScoringEngine.getServerScore(_servingTeam, _teamAScore, _teamBScore);
     int receiverScore = ScoringEngine.getReceiverScore(_servingTeam, _teamAScore, _teamBScore);
     
     if (_config.matchType == MatchType.doubles) {
-      return '$serverScore - $receiverScore - ${_serverNumber == ServerNumber.one ? 1 : 2}';
+      int srvNum = _serverNumber == ServerNumber.one ? 1 : 2;
+      return '$serverScore – $receiverScore – $srvNum';
     }
-    return '$serverScore - $receiverScore';
+    return '$serverScore – $receiverScore';
   }
 
   int getServerScore() => ScoringEngine.getServerScore(_servingTeam, _teamAScore, _teamBScore);
@@ -94,6 +98,7 @@ class GameStateProvider extends ChangeNotifier {
       _handleTraditionalScoringPoint(team);
     }
 
+    _logAction('${team == Team.a ? 'Team A' : 'Team B'} scored (${scoreDisplay})');
     _checkGameOver();
     _updateServerSide();
     notifyListeners();
@@ -107,8 +112,16 @@ class GameStateProvider extends ChangeNotifier {
     }
 
     if (_config.matchType == MatchType.doubles) {
-      _handleServerRotationDoubles(winningTeam == _servingTeam);
+      if (winningTeam != _servingTeam) {
+        _servingTeam = winningTeam;
+        _serverNumber = ServerNumber.one;
+      }
+    } else {
+      if (winningTeam != _servingTeam) {
+        _servingTeam = winningTeam;
+      }
     }
+    _isFirstServe = false;
   }
 
   void _handleTraditionalScoringPoint(Team team) {
@@ -124,30 +137,36 @@ class GameStateProvider extends ChangeNotifier {
       }
     } else {
       if (_config.matchType == MatchType.doubles) {
-        _handleServerRotationDoubles(false);
+        _handleDoubleFault();
+      } else {
+        _servingTeam = _servingTeam == Team.a ? Team.b : Team.a;
       }
     }
   }
 
   void _handleServerRotationDoubles(bool pointWon) {
     if (pointWon) {
-      if (_serverNumber == ServerNumber.one) {
-        _serverNumber = ServerNumber.two;
-      }
+      _isFirstServe = false;
     } else {
-      if (_serverNumber == ServerNumber.two) {
-        _serverNumber = ServerNumber.one;
-        _switchServingTeam();
-      } else {
-        _serverNumber = ServerNumber.one;
-      }
+      _handleDoubleFault();
     }
-    _isFirstServe = false;
   }
 
-  void _switchServingTeam() {
-    _servingTeam = _servingTeam == Team.a ? Team.b : Team.a;
-    _serverNumber = ServerNumber.two;
+  void _handleDoubleFault() {
+    if (_isFirstServe) {
+      _isFirstServe = false;
+      _servingTeam = _servingTeam == Team.a ? Team.b : Team.a;
+      _serverNumber = ServerNumber.two;
+      _logAction('Side-out → ${_servingTeam == Team.a ? 'Team A' : 'Team B'} serves (${scoreDisplay})');
+    } else if (_serverNumber == ServerNumber.two) {
+      _serverNumber = ServerNumber.one;
+      _logAction('Fault → Server 1 serves (${scoreDisplay})');
+    } else {
+      _servingTeam = _servingTeam == Team.a ? Team.b : Team.a;
+      _serverNumber = ServerNumber.two;
+      _logAction('Side-out → ${_servingTeam == Team.a ? 'Team A' : 'Team B'} serves (${scoreDisplay})');
+    }
+    _isFirstServe = false;
   }
 
   void _updateServerSide() {
@@ -162,9 +181,10 @@ class GameStateProvider extends ChangeNotifier {
     _saveState();
 
     if (_config.matchType == MatchType.doubles) {
-      _handleServerRotationDoubles(false);
+      _handleDoubleFault();
     } else {
-      _switchServingTeam();
+      _servingTeam = _servingTeam == Team.a ? Team.b : Team.a;
+      _logAction('Side-out → ${_servingTeam == Team.a ? 'Team A' : 'Team B'} serves (${scoreDisplay})');
     }
 
     _updateServerSide();
@@ -172,47 +192,36 @@ class GameStateProvider extends ChangeNotifier {
   }
 
   void _checkGameOver() {
-    int serverScore = _servingTeam == Team.a ? _teamAScore : _teamBScore;
-    int receiverScore = _servingTeam == Team.a ? _teamBScore : _teamAScore;
-    
-    if (_config.scoringSystem == ScoringSystem.rally) {
-      if (serverScore >= _config.winningScore || receiverScore >= _config.winningScore) {
-        if (_config.winByTwo) {
-          if (serverScore >= _config.winningScore - 1 && 
-              receiverScore >= _config.winningScore - 1) {
-            int margin = serverScore - receiverScore;
-            if (margin >= 2) {
-              _winner = _servingTeam;
-              _gameOver = true;
-            } else if (-margin >= 2) {
-              _winner = _servingTeam == Team.a ? Team.b : Team.a;
-              _gameOver = true;
-            }
-          }
-        } else {
-          _winner = serverScore > receiverScore ? _servingTeam : (receiverScore > serverScore ? (_servingTeam == Team.a ? Team.b : Team.a) : null);
-          _gameOver = _winner != null;
-        }
-      }
+    final int aScore = _teamAScore;
+    final int bScore = _teamBScore;
+    final int target = _config.winningScore;
+
+    bool aWins = aScore >= target;
+    bool bWins = bScore >= target;
+
+    if (!aWins && !bWins) return;
+
+    if (_config.winByTwo) {
+      int diff = (aScore - bScore).abs();
+      if (diff < 2) return;
+      _winner = aScore > bScore ? Team.a : Team.b;
     } else {
-      if (_config.winByTwo) {
-        if (serverScore >= _config.winningScore - 1 && receiverScore >= _config.winningScore - 1) {
-          int margin = serverScore - receiverScore;
-          if (margin >= 2) {
-            _winner = _servingTeam;
-            _gameOver = true;
-          }
-        } else if (serverScore >= _config.winningScore) {
-          _winner = _servingTeam;
-          _gameOver = true;
-        }
-      } else {
-        if (serverScore >= _config.winningScore) {
-          _winner = _servingTeam;
-          _gameOver = true;
-        }
-      }
+      _winner = aScore >= target && aScore > bScore
+          ? Team.a
+          : bScore >= target && bScore > aScore
+              ? Team.b
+              : null;
     }
+
+    if (_winner != null) {
+      _gameOver = true;
+      HapticFeedback.heavyImpact();
+      _logAction('Game Over! ${_winner == Team.a ? 'Team A' : 'Team B'} wins ${aScore}-$bScore');
+    }
+  }
+
+  void _logAction(String message) {
+    _actionLog.add(message);
   }
 
   void undoLastAction() {
@@ -228,6 +237,10 @@ class GameStateProvider extends ChangeNotifier {
     _gameOver = false;
     _winner = null;
     
+    if (_actionLog.isNotEmpty) {
+      _actionLog.removeLast();
+    }
+    HapticFeedback.lightImpact();
     notifyListeners();
   }
 
@@ -241,6 +254,7 @@ class GameStateProvider extends ChangeNotifier {
     _gameOver = false;
     _winner = null;
     _history.clear();
+    _actionLog.clear();
     
     notifyListeners();
   }
